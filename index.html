@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixer Percentages</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0.75em;
+      font-family: Arial, sans-serif;
+    }
+
+    h3 {
+      margin: 0 0 0.75em;
+    }
+
+    .inputs {
+      display: grid;
+      grid-template-columns: 15em 25em;
+      column-gap: 1em;
+      row-gap: 0.4em;
+      align-items: center;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      min-height: 1.8em;
+      gap: 0.4em;
+    }
+
+    .field > label:first-child {
+      width: 6em;
+      flex: 0 0 6em;
+    }
+
+    .inline-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25em;
+      white-space: nowrap;
+    }
+
+    input,
+    select {
+      font: inherit;
+    }
+
+    input[type="checkbox"] {
+      margin: 0;
+    }
+
+    input[type="number"] {
+      box-sizing: border-box;
+      width: 4em;
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      margin: 0;
+      -webkit-appearance: none;
+    }
+
+    .offset-field {
+      grid-column: 2;
+    }
+
+    #result {
+      margin-top: 1em;
+      line-height: 1.6;
+    }
+
+    output {
+      font-weight: bold;
+    }
+
+    output.not-calculated {
+      color: #999;
+    }
+
+    @media (max-width: 42em) {
+      .inputs {
+        grid-template-columns: 15em;
+      }
+
+      .offset-field {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h3>Fixer Percentages</h3>
+
+  <div class="inputs">
+    <div class="field">
+      <label for="tnInput"><strong>Item TN</strong></label>
+      <input id="tnInput" type="number" step="1">
+    </div>
+
+    <div class="field">
+      <label for="skillInput"><strong>Etiquette</strong></label>
+      <input id="skillInput" type="number" min="0" step="1">
+    </div>
+
+    <div class="field">
+      <label for="lifestyleInput">Lifestyle</label>
+      <select id="lifestyleInput">
+        <option value="" selected></option>
+        <option value="High">High</option>
+        <option value="Luxury">Luxury</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="pheremonesInput">Pheremones</label>
+      <select id="pheremonesInput">
+        <option value="" selected></option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+      </select>
+      <label class="inline-label" for="culturedInput">
+        Cultured?
+        <input id="culturedInput" type="checkbox">
+      </label>
+    </div>
+
+    <div class="field">
+      <label for="metavariantInput">Metavariant?</label>
+      <input id="metavariantInput" type="checkbox">
+    </div>
+
+    <div class="field">
+      <label for="kinesicsInput">Kinesics</label>
+      <select id="kinesicsInput">
+        <option value="" selected></option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+
+    <div class="field offset-field">
+      <label for="offsetInput">Offset</label>
+      <select id="offsetInput">
+        <option value="" selected></option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="result">
+    Chance of placing a successful order in one attempt:
+    <u><output id="probabilityOutput" class="not-calculated"></output></u>
+    <br><br>
+    Number of tries to approach a <strong><code>50%</code></strong> success chance:
+    <output id="tries50Output" class="not-calculated"></output>
+    <br>
+    Number of tries to approach a <strong><code>90%</code></strong> success chance:
+    <output id="tries90Output" class="not-calculated"></output>
+    <br>
+    Number of tries to approach a <strong><code>95%</code></strong> success chance:
+    <output id="tries95Output" class="not-calculated"></output>
+    <br>
+    Number of tries to approach a <strong><code>99%</code></strong> success chance:
+    <output id="tries99Output" class="not-calculated"></output>
+  </div>
+
+  <script>
+    const tnInput = document.getElementById("tnInput");
+    const skillInput = document.getElementById("skillInput");
+    const lifestyleInput = document.getElementById("lifestyleInput");
+    const pheremonesInput = document.getElementById("pheremonesInput");
+    const culturedInput = document.getElementById("culturedInput");
+    const metavariantInput = document.getElementById("metavariantInput");
+    const kinesicsInput = document.getElementById("kinesicsInput");
+    const offsetInput = document.getElementById("offsetInput");
+
+    const probabilityOutput = document.getElementById("probabilityOutput");
+    const tries50Output = document.getElementById("tries50Output");
+    const tries90Output = document.getElementById("tries90Output");
+    const tries95Output = document.getElementById("tries95Output");
+    const tries99Output = document.getElementById("tries99Output");
+
+    const storageKey = "fixerPercentages";
+
+    let savedValues = {};
+    try {
+      savedValues = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    } catch {
+      savedValues = {};
+    }
+
+    skillInput.value = savedValues.skill ?? "";
+    lifestyleInput.value = savedValues.lifestyle ?? "";
+    pheremonesInput.value = savedValues.pheremones ?? "";
+    culturedInput.checked = savedValues.cultured ?? false;
+    metavariantInput.checked = savedValues.metavariant ?? false;
+    kinesicsInput.value = savedValues.kinesics ?? "";
+
+    function saveValues() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        skill: skillInput.value,
+        lifestyle: lifestyleInput.value,
+        pheremones: pheremonesInput.value,
+        cultured: culturedInput.checked,
+        metavariant: metavariantInput.checked,
+        kinesics: kinesicsInput.value
+      }));
+    }
+
+    function calculateProbability(target, numberOfDice) {
+      const targetSixes = Math.floor(target / 6);
+      const targetRemainder = target - 6 * targetSixes;
+
+      const chanceOneDieFallsShort =
+        1 - Math.pow(6, -targetSixes) +
+        Math.max(targetRemainder - 1, 0) /
+          Math.pow(6, targetSixes + 1);
+
+      return 100 * (
+        1 - Math.pow(chanceOneDieFallsShort, numberOfDice)
+      );
+    }
+
+    function triesToReachChance(dropChance, targetChance) {
+      if (dropChance <= 0) {
+        return "Impossible";
+      }
+
+      if (dropChance >= 1) {
+        return "1";
+      }
+
+      return String(
+        Math.ceil(Math.log(1 - targetChance) / Math.log(1 - dropChance))
+      );
+    }
+
+    function showNotCalculated() {
+      [
+        probabilityOutput,
+        tries50Output,
+        tries90Output,
+        tries95Output,
+        tries99Output
+      ].forEach(output => {
+        output.textContent = "";
+        output.classList.add("not-calculated");
+      });
+    }
+
+    function update() {
+      if (tnInput.value === "" || skillInput.value === "") {
+        showNotCalculated();
+        return;
+      }
+
+      let target = tnInput.valueAsNumber;
+      let numberOfDice = skillInput.valueAsNumber;
+
+      if (
+        !Number.isInteger(target) ||
+        !Number.isInteger(numberOfDice) ||
+        numberOfDice < 0
+      ) {
+        showNotCalculated();
+        return;
+      }
+
+      if (metavariantInput.checked) {
+        target += 4;
+      }
+
+      const pheremonesBonus =
+        (Number(pheremonesInput.value) || 0) *
+        (culturedInput.checked ? 2 : 1);
+
+      numberOfDice += pheremonesBonus;
+
+      if (lifestyleInput.value === "High") {
+        target -= 1;
+      } else if (lifestyleInput.value === "Luxury") {
+        target -= 2;
+      }
+
+      target -= Number(kinesicsInput.value) || 0;
+      target -= Number(offsetInput.value) || 0;
+
+      const dropChance =
+        calculateProbability(target, numberOfDice) / 100;
+
+      probabilityOutput.textContent =
+        `${(dropChance * 100).toFixed(2)}%`;
+
+      [
+        [tries50Output, 0.50],
+        [tries90Output, 0.90],
+        [tries95Output, 0.95],
+        [tries99Output, 0.99]
+      ].forEach(([output, targetChance]) => {
+        output.textContent = triesToReachChance(dropChance, targetChance);
+      });
+
+      [
+        probabilityOutput,
+        tries50Output,
+        tries90Output,
+        tries95Output,
+        tries99Output
+      ].forEach(output => output.classList.remove("not-calculated"));
+    }
+
+    tnInput.addEventListener("input", update);
+
+    [
+      skillInput,
+      lifestyleInput,
+      pheremonesInput,
+      culturedInput,
+      metavariantInput,
+      kinesicsInput
+    ].forEach(input => {
+      input.addEventListener("input", () => {
+        saveValues();
+        update();
+      });
+
+      input.addEventListener("change", () => {
+        saveValues();
+        update();
+      });
+    });
+
+    offsetInput.addEventListener("input", update);
+    offsetInput.addEventListener("change", update);
+
+    update();
+  </script>
+</body>
+</html>
