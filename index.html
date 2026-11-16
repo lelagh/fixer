@@ -98,7 +98,7 @@
   <div class="inputs">
     <div class="field">
       <label for="tnInput"><strong>Item TN</strong></label>
-      <input id="tnInput" type="number" step="1">
+      <input id="tnInput" type="number" max="40" step="1">
     </div>
 
     <div class="field">
@@ -160,16 +160,16 @@
     Chance of placing a successful order in one attempt:
     <u><output id="probabilityOutput" class="not-calculated"></output></u>
     <br><br>
-    Number of tries to approach a <strong><code>50%</code></strong> success chance:
+    Number of tries to approach a 50% success chance:
     <output id="tries50Output" class="not-calculated"></output>
     <br>
-    Number of tries to approach a <strong><code>90%</code></strong> success chance:
+    Number of tries to approach a 90% success chance:
     <output id="tries90Output" class="not-calculated"></output>
     <br>
-    Number of tries to approach a <strong><code>95%</code></strong> success chance:
+    Number of tries to approach a 95% success chance:
     <output id="tries95Output" class="not-calculated"></output>
     <br>
-    Number of tries to approach a <strong><code>99%</code></strong> success chance:
+    Number of tries to approach a 99% success chance:
     <output id="tries99Output" class="not-calculated"></output>
   </div>
 
@@ -190,6 +190,7 @@
     const tries99Output = document.getElementById("tries99Output");
 
     const storageKey = "fixerPercentages";
+    const LOG_6 = Math.log(6);
 
     let savedValues = {};
     try {
@@ -216,32 +217,80 @@
       }));
     }
 
-    function calculateProbability(target, numberOfDice) {
+    function logSingleDieSuccessProbability(target) {
       const targetSixes = Math.floor(target / 6);
       const targetRemainder = target - 6 * targetSixes;
 
-      const chanceOneDieFallsShort =
-        1 - Math.pow(6, -targetSixes) +
-        Math.max(targetRemainder - 1, 0) /
-          Math.pow(6, targetSixes + 1);
+      const multiplier =
+        targetRemainder <= 1
+          ? 1
+          : (7 - targetRemainder) / 6;
 
-      return 100 * (
-        1 - Math.pow(chanceOneDieFallsShort, numberOfDice)
-      );
+      return -targetSixes * LOG_6 + Math.log(multiplier);
     }
 
-    function triesToReachChance(dropChance, targetChance) {
-      if (dropChance <= 0) {
-        return "Impossible";
+    function logAttemptSuccessProbability(target, numberOfDice) {
+      if (numberOfDice === 0) {
+        return -Infinity;
       }
 
-      if (dropChance >= 1) {
+      const logSingleDieChance =
+        logSingleDieSuccessProbability(target);
+
+      if (logSingleDieChance >= 0) {
+        return 0;
+      }
+
+      if (logSingleDieChance < -36) {
+        return Math.log(numberOfDice) + logSingleDieChance;
+      }
+
+      const singleDieChance = Math.exp(logSingleDieChance);
+      const logAttemptFailure =
+        numberOfDice * Math.log1p(-singleDieChance);
+
+      return Math.log(-Math.expm1(logAttemptFailure));
+    }
+
+    function formatProbabilityPercent(logProbability) {
+      if (logProbability === -Infinity) {
+        return "0.00%";
+      }
+
+      const logPercent = logProbability + Math.log(100);
+
+      if (logPercent < Math.log(0.01)) {
+        return `${Math.exp(logPercent).toExponential(2)}%`;
+      }
+
+      const probability = Math.exp(logProbability);
+      return `${(probability * 100).toFixed(2)}%`;
+    }
+
+    function formatTries(logProbability, targetChance) {
+      if (logProbability === -Infinity) {
+        return "No finite number";
+      }
+
+      if (logProbability >= 0) {
         return "1";
       }
 
-      return String(
-        Math.ceil(Math.log(1 - targetChance) / Math.log(1 - dropChance))
-      );
+      const logOneMinusTargetChance = Math.log1p(-targetChance);
+      const logLogFailure =
+        logProbability < -36
+          ? logProbability
+          : Math.log(-Math.log1p(-Math.exp(logProbability)));
+
+      const logTries =
+        Math.log(-logOneMinusTargetChance) - logLogFailure;
+
+      if (logTries > Math.log(Number.MAX_SAFE_INTEGER)) {
+        const exponent = logTries / Math.LN10;
+        return `≈ 10^${exponent.toFixed(2)}`;
+      }
+
+      return String(Math.ceil(Math.exp(logTries)));
     }
 
     function showNotCalculated() {
@@ -263,17 +312,24 @@
         return;
       }
 
-      let target = tnInput.valueAsNumber;
+      let itemTN = tnInput.valueAsNumber;
       let numberOfDice = skillInput.valueAsNumber;
 
       if (
-        !Number.isInteger(target) ||
+        !Number.isInteger(itemTN) ||
         !Number.isInteger(numberOfDice) ||
         numberOfDice < 0
       ) {
         showNotCalculated();
         return;
       }
+
+      if (itemTN > 40) {
+        itemTN = 40;
+        tnInput.value = "40";
+      }
+
+      let target = itemTN;
 
       if (metavariantInput.checked) {
         target += 4;
@@ -294,11 +350,11 @@
       target -= Number(kinesicsInput.value) || 0;
       target -= Number(offsetInput.value) || 0;
 
-      const dropChance =
-        calculateProbability(target, numberOfDice) / 100;
+      const logProbability =
+        logAttemptSuccessProbability(target, numberOfDice);
 
       probabilityOutput.textContent =
-        `${(dropChance * 100).toFixed(2)}%`;
+        formatProbabilityPercent(logProbability);
 
       [
         [tries50Output, 0.50],
@@ -306,7 +362,8 @@
         [tries95Output, 0.95],
         [tries99Output, 0.99]
       ].forEach(([output, targetChance]) => {
-        output.textContent = triesToReachChance(dropChance, targetChance);
+        output.textContent =
+          formatTries(logProbability, targetChance);
       });
 
       [
@@ -319,6 +376,7 @@
     }
 
     tnInput.addEventListener("input", update);
+    tnInput.addEventListener("change", update);
 
     [
       skillInput,
